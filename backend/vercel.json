@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": { "api/contact.mjs": { "maxDuration": 30 } },
+  "regions": ["iad1"]
+}

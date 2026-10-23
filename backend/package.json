@@ -1,0 +1,11 @@
+{
+  "name": "choose-life-midland-contact",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "nodemailer": "10.2.1"
+  }
+}
