@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": { "api/contact.mjs": { "maxDuration": 30 } },
+  "functions": { "api/contact.mjs": { "maxDuration": 60, "includeFiles": "assets/email-logo.png" } },
   "regions": ["iad1"]
 }

@@ -1,11 +1,18 @@
 import { parseContact } from '../../contact-validation.mjs';
+import { createVisitorConfirmation } from './visitor-confirmation.mjs';
 
 const TEAM_EMAIL = 'contact@chooselifemidland.com';
 const SITE = 'https://chooselifemidland.com';
 const ALLOWED_ORIGINS = new Set([SITE, 'https://www.chooselifemidland.com']);
 const DELIVERY_ERROR = 'Your request could not be sent. Your details are still here. Please try again, call 432-695-6955, or email contact@chooselifemidland.com.';
 
-export function createContactHandler({ env = process.env, sendMail } = {}) {
+function logDeliveryFailure(kind, error) {
+  // Never put contact details, message contents, or credentials in runtime logs.
+  const safeCodes = ['EAUTH', 'ETIMEDOUT', 'ECONNECTION', 'EENVELOPE', 'EDNS', 'ESOCKET'];
+  console.error(`${kind} email delivery failed`, safeCodes.includes(error?.code) ? error.code : 'SMTP_ERROR');
+}
+
+export function createContactHandler({ env = process.env, sendMail, waitUntil = task => task } = {}) {
   return async function handleContact(request) {
     const origin = request.headers.get('origin');
     const headers = { 'Cache-Control': 'no-store', Vary: 'Origin' };
@@ -68,12 +75,25 @@ export function createContactHandler({ env = process.env, sendMail } = {}) {
     try {
       const result = await sendMail(mail, env);
       if (!result.accepted?.some(address => String(address).toLowerCase() === TEAM_EMAIL)) throw new Error('Recipient not accepted');
-      return success();
     } catch (error) {
-      // Contact details, message contents, and credentials must not enter runtime logs.
-      const safeCodes = ['EAUTH', 'ETIMEDOUT', 'ECONNECTION', 'EENVELOPE', 'EDNS', 'ESOCKET'];
-      console.error('Contact email delivery failed', safeCodes.includes(error.code) ? error.code : 'SMTP_ERROR');
+      logDeliveryFailure('Contact', error);
       return failure(DELIVERY_ERROR, 503);
     }
+
+    if (contact.kind === 'email') {
+      const confirmation = (async () => {
+        try {
+          const result = await sendMail(createVisitorConfirmation(contact.value), env);
+          if (!result.accepted?.some(address => String(address).toLowerCase() === contact.value.toLowerCase())) throw new Error('Confirmation recipient not accepted');
+          console.info('Visitor confirmation accepted by SMTP');
+        } catch (error) {
+          // The team already received the request; do not trigger a duplicate submission.
+          logDeliveryFailure('Confirmation', error);
+        }
+      })();
+      // Vercel keeps this task alive without delaying the visitor's success response.
+      await waitUntil(confirmation);
+    }
+    return success();
   };
 }
